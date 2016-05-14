@@ -106,9 +106,9 @@ int print_caps(int fd)
         fmt.fmt.pix.width = 640;
         fmt.fmt.pix.height = 480;
 //        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_BGR24;
-//        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;  // my
+        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;  // my
 //        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_GREY;
-        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
+//        fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_MJPEG;
 //        fmt.fmt.pix.field = V4L2_FIELD_NONE;
         
         if (-1 == xioctl(fd, VIDIOC_S_FMT, &fmt))
@@ -174,8 +174,48 @@ int init_mmap(int fd)
     return 0;
 }
  
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
+#include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+
+#include <cstdio>
+
 int capture_video(int fd)
 {
+    bool quit = false;
+    SDL_Event event;
+
+
+    if (SDL_Init(SDL_INIT_VIDEO) != 0){
+                    std::cout << "SDL_Init Error: " << SDL_GetError() << std::endl;
+                    return 1;
+            }
+            SDL_Quit();
+
+    SDL_Window *window;        
+    SDL_Renderer *renderer;
+    SDL_Texture *texture;
+
+    window = SDL_CreateWindow("Hello World!", 100, 100, 640, 480, SDL_WINDOW_SHOWN);
+    if (window == nullptr){
+            std::cout << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
+            SDL_Quit();
+            return 1;
+    }
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (renderer == nullptr){
+            SDL_DestroyWindow(window);
+            std::cout << "SDL_CreateRenderer Error: " << SDL_GetError() << std::endl;
+            SDL_Quit();
+            return 1;
+    }
+
+    IMG_Init(IMG_INIT_JPG);
+    
+    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_YVYU, SDL_TEXTUREACCESS_STREAMING, 640, 480);
+
     IplImage* frame;
     cvNamedWindow("window",CV_WINDOW_AUTOSIZE);
     printf("Start Capture");
@@ -212,18 +252,33 @@ int capture_video(int fd)
             return 1;
         }
   */    
-    if(-1 == xioctl(fd, VIDIOC_DQBUF, &buf))
-    {
-        perror("Retrieving Frame");
-        return 1;
-    }
-//    printf ("saving image\n");
+        if(-1 == xioctl(fd, VIDIOC_DQBUF, &buf))
+        {
+            perror("Retrieving Frame");
+            return 1;
+        }
+    //    printf ("saving image\n");
 
-    CvMat cvmat = cvMat(480, 640, CV_8UC3, (void*)buffer);
-    frame = cvDecodeImage(&cvmat, 1);
-    cvNamedWindow("window",CV_WINDOW_AUTOSIZE);
-    cvShowImage("window", frame); 
-    cvWaitKey(1);  //обновление окна
+        SDL_UpdateTexture(texture, nullptr, buffer, 640 * 2);
+        SDL_WaitEvent(&event);
+
+        switch (event.type)
+        {
+            case SDL_QUIT:
+                quit = true;
+                break;
+        }
+
+        //SDL_Rect dstrect = { 5, 5, 320, 240 };
+        //SDL_RenderCopy(renderer, texture, NULL, &dstrect);
+        SDL_RenderCopy(renderer, texture, NULL, NULL);
+        SDL_RenderPresent(renderer);
+
+//    CvMat cvmat = cvMat(480, 640, CV_8UC3, (void*)buffer);
+//    frame = cvDecodeImage(&cvmat, 1);
+//    cvNamedWindow("window",CV_WINDOW_AUTOSIZE);
+//    cvShowImage("window", frame); 
+//    cvWaitKey(1);  //обновление окна
         
     }
     
